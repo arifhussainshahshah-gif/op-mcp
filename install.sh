@@ -10,25 +10,24 @@ command -v node >/dev/null || { echo 'Node.js 20+ is required' >&2; exit 1; }
 command -v npm >/dev/null || { echo 'npm is required' >&2; exit 1; }
 
 mkdir -p "$(dirname "$DIR")" "$BIN"
-if [ -d "$DIR/.git" ]; then
-  git -C "$DIR" pull --ff-only
-else
-  git clone "$REPO" "$DIR"
-fi
-
+if [ -d "$DIR/.git" ]; then git -C "$DIR" pull --ff-only; else git clone "$REPO" "$DIR"; fi
 cd "$DIR"
 npm install
 npm run build
-ln -sfn "$DIR/dist/src/index.js" "$BIN/op-mcp"
+cat > "$BIN/op-mcp" <<EOF
+#!/usr/bin/env bash
+exec node "$DIR/dist/src/index.js" "\$@"
+EOF
+chmod +x "$BIN/op-mcp"
 
 cat <<EOF
 Installed op-mcp at $DIR
 Executable: $BIN/op-mcp
 
-For a local OpenCode server:
+Start OpenCode:
   opencode serve --hostname 127.0.0.1 --port 4096
 
-Configure the MCP host to launch:
+MCP launch command:
   $BIN/op-mcp
 
 Optional environment variables:
