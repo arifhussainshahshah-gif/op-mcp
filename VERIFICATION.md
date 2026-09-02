@@ -4,53 +4,55 @@
 
 `IMPLEMENTED`
 
-## Step 1 — Research
+## Research confirmed
 
-- `[VERIFIED RESEARCH]` Official OpenCode documentation states `opencode serve` starts a headless HTTP server and exposes an OpenAPI endpoint.
-- `[VERIFIED RESEARCH]` OpenCode server defaults to localhost and documents HTTP Basic Auth via `OPENCODE_SERVER_PASSWORD` / `OPENCODE_SERVER_USERNAME`.
-- `[VERIFIED RESEARCH]` The documented API includes global health, projects, sessions, prompts, async prompts, messages, abort, commands, shell, permissions, questions, files, search, VCS, agents, skills, configuration, providers, MCP management, and TUI control.
+- `[VERIFIED]` Official OpenCode server documentation confirms `opencode serve` as the headless HTTP/OpenAPI interface.
+- `[VERIFIED]` Default bind is `127.0.0.1:4096`; Basic Auth is controlled by `OPENCODE_SERVER_PASSWORD` with username default `opencode`.
+- `[VERIFIED]` Current session/message/shell/command request shapes were checked against the current server documentation.
+- `[VERIFIED]` Current permission response path is `/session/:id/permissions/:permissionID` with `{ response, remember? }`.
+- `[VERIFIED]` Current text search uses `/find?pattern=`, file-name search uses `/find/file?query=`, and session diff uses `/session/:id/diff?messageID?`.
+- `[VERIFIED]` Current TUI, SSE, experimental-tool, config/provider, MCP, agent, logging, and auth endpoints are documented by OpenCode.
 
-## Step 2 — Interface decision
+## Interface decision
 
 Chosen interface: **OpenCode headless HTTP/OpenAPI server**.
 
-Reason: OpenCode documents this as the programmatic control interface used by its clients, and the server exposes its runtime OpenAPI description at `/doc`.
+Reason: OpenCode explicitly documents it as the programmatic interface used by clients and publishes the runtime OpenAPI description at `/doc`. citeturn2search0
 
-## Step 3 — MCP specification
+## Implementation
 
-The MCP exposes high-level wrappers for the core stable operations and `opencode_request` for documented HTTP operations without a dedicated wrapper.
+`src/index.ts` implements an MCP stdio server using the official MCP TypeScript server package. It forwards requests to OpenCode with optional Basic Auth and runtime-configurable URL/timeouts. No real credentials are stored in source.
 
-## Step 4 — Implementation
+The implementation was corrected to match the current documented shell, command, permission, file-search, and session-diff routes.
 
-Implemented in `src/index.ts` using the official MCP TypeScript server SDK package and stdio transport. Runtime configuration is environment-based; no secrets are stored in source.
+## Installer
 
-## Step 5 — Standalone testing
+`install.sh` creates a real executable wrapper that invokes Node explicitly, avoiding reliance on a JavaScript shebang or executable bit in the compiled artifact.
 
-`[UNKNOWN]` Not executed in this hosted development session because a runnable OpenCode installation and disposable workspace were not available here.
+## Standalone verification
 
-Required evidence:
+`verify-opencode.sh` was added. It checks:
 
-1. Start `opencode serve`.
-2. Call `opencode_health` and record the returned version.
-3. Create a disposable session.
-4. Send a real prompt that makes an observable workspace change.
-5. Confirm the changed file/diff and returned assistant result.
-6. Test a real abort/permission path where applicable.
+1. OpenCode health endpoint is reachable.
+2. `/doc` is reachable.
+3. Current key session message, shell, and permission routes are present in the server's OpenAPI document.
 
-## Step 6 — Skill file
+This is a repository-level verification aid. It cannot be executed against a real OpenCode process from this hosted environment.
 
-`skill.md` is present and records the documented interface, actions, limitations, security requirements, and verification state.
+## Hermes connection
 
-## Step 7 — Hermes connection
+`[UNKNOWN]` A real Hermes runtime registration/connection has not been executed here. The MCP uses standard stdio transport, and the repository contains the Hermes-oriented `skill.md`.
 
-`[UNKNOWN]` Hermes runtime registration has not been executed from this repository environment. The MCP is a standard stdio server and is intended to be registered using Hermes' normal MCP server configuration.
+## End-to-end verification
 
-## Step 8 — End-to-end verification
+`[UNKNOWN]` A real Hermes → op-mcp → OpenCode → real filesystem change → MCP → Hermes round trip has not been executed in this environment.
 
-`[UNKNOWN]` Not executed. Therefore the integration is **not VERIFIED**.
+Therefore the integration is **not VERIFIED**.
 
-## Step 9 — Status
+## Final status
 
-Current status: **IMPLEMENTED**.
+`IMPLEMENTED`
 
-Do not change this to `VERIFIED` until the real Hermes → op-mcp → OpenCode → real result → op-mcp → Hermes flow has been executed and the evidence is added here.
+`TESTING` begins when the user runs `bash verify-opencode.sh` against a live OpenCode server and then performs the Hermes E2E procedure.
+
+`VERIFIED` is allowed only after real E2E evidence is recorded. No `VERIFIED` claim is made by this repository at this time.
