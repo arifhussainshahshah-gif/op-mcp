@@ -8,21 +8,22 @@ status: IMPLEMENTED
 
 ## Purpose
 
-This MCP gives an MCP host (including Hermes) programmatic control of an OpenCode instance. The transport from Hermes to this MCP is MCP stdio; the MCP then calls OpenCode's documented HTTP server.
+This MCP gives an MCP host such as Hermes programmatic control of an OpenCode instance. Hermes connects to this MCP over stdio; the MCP calls OpenCode's documented HTTP server.
+
+## Source of truth
+
+The authoritative OpenCode control surface is the running server's OpenAPI 3.1 document at `GET /doc`. OpenCode's current server documentation confirms `opencode serve`, localhost defaults, Basic Auth, session/message/shell/command APIs, file search/read/status, experimental tool discovery, LSP/formatter/MCP status, agents, logging, TUI control, auth, and SSE events.
 
 ## Verification labels
 
-- [VERIFIED RESEARCH] OpenCode documents `opencode serve` as a headless HTTP server exposing an OpenAPI 3.1 API.
-- [VERIFIED RESEARCH] OpenCode documents localhost binding by default and HTTP Basic Auth using `OPENCODE_SERVER_PASSWORD` (username defaults to `opencode`).
-- [VERIFIED RESEARCH] OpenCode documents session creation/list/get/delete, synchronous and asynchronous prompting, abort, commands, shell, permissions, questions, files, VCS, agents, skills, configuration, and MCP management endpoints.
-- [UNKNOWN] Hermes-specific connection/discovery mechanics cannot be verified from the OpenCode sources alone; configure this MCP using the standard Hermes MCP registration mechanism available in the Hermes installation.
-- [UNKNOWN] A real Hermes -> MCP -> OpenCode -> result round trip has not been executed in this repository environment.
-
-## When to use
-
-Use this MCP when Hermes needs OpenCode to perform or supervise coding/agent work in a real project. Prefer the high-level tools for common operations. Use `opencode_request` when an OpenCode API operation is documented but does not have a dedicated high-level wrapper.
-
-Do not claim `VERIFIED` until a real end-to-end Hermes task has been executed.
+- [VERIFIED RESEARCH] OpenCode documents `opencode serve` as a headless HTTP server exposing OpenAPI 3.1.
+- [VERIFIED RESEARCH] Default server bind is `127.0.0.1:4096` and Basic Auth uses `OPENCODE_SERVER_PASSWORD`, with username defaulting to `opencode`.
+- [VERIFIED RESEARCH] Current OpenCode session shell requests require `{ agent, model?, command }`.
+- [VERIFIED RESEARCH] Current OpenCode permission responses use `POST /session/:id/permissions/:permissionID` with `{ response, remember? }`.
+- [VERIFIED RESEARCH] Current file search uses `/find?pattern=`, while file-name search uses `/find/file?query=`.
+- [VERIFIED RESEARCH] Current session diff uses `/session/:id/diff?messageID?`.
+- [UNKNOWN] Hermes-specific installation/discovery depends on the Hermes installation/configuration available on the user's machine.
+- [UNKNOWN] A real Hermes -> MCP -> OpenCode -> real result round trip has not been executed in this repository environment.
 
 ## Install
 
@@ -30,7 +31,7 @@ Do not claim `VERIFIED` until a real end-to-end Hermes task has been executed.
 curl -fsSL https://raw.githubusercontent.com/arifhussainshahshah-gif/op-mcp/main/install.sh | bash
 ```
 
-The installer builds the MCP and installs `op-mcp` under `$HOME/.local/bin` by default.
+The installer builds the MCP and installs an executable wrapper at `$HOME/.local/bin/op-mcp`.
 
 ## Start OpenCode
 
@@ -44,75 +45,91 @@ Optional authentication:
 OPENCODE_SERVER_PASSWORD='<RUNTIME_PASSWORD>' opencode serve --hostname 127.0.0.1 --port 4096
 ```
 
-For a non-loopback bind, authentication should be enabled.
+Keep OpenCode on loopback unless remote access is intentional. If exposed beyond loopback, enable authentication.
 
 ## MCP environment
 
-- `OPENCODE_URL`: OpenCode base URL. Default: `http://127.0.0.1:4096`.
-- `OPENCODE_SERVER_USERNAME`: Basic-auth username. Default: `opencode`.
+- `OPENCODE_URL`: OpenCode base URL. Default `http://127.0.0.1:4096`.
+- `OPENCODE_SERVER_USERNAME`: Basic-auth username. Default `opencode`.
 - `OPENCODE_SERVER_PASSWORD`: Basic-auth password. Never commit a real value.
+- `OPENCODE_REQUEST_TIMEOUT_MS`: HTTP request timeout. Default `120000`.
 
-## Exposed actions
+## Exposed control surface
 
-- `opencode_health` — server health/version.
-- `opencode_request` — documented OpenCode API escape hatch (GET/POST/PUT/PATCH/DELETE).
-- `opencode_projects` — known projects.
-- `opencode_sessions` — list sessions.
-- `opencode_session_create/get/delete` — lifecycle management.
-- `opencode_prompt` — synchronous prompt execution.
-- `opencode_prompt_async` — asynchronous prompt submission.
-- `opencode_messages` — read session messages and parts.
-- `opencode_abort` — stop active processing.
-- `opencode_shell` — run a shell command in session context, subject to OpenCode permissions.
-- `opencode_command` — execute an OpenCode slash command.
-- `opencode_permissions` / `opencode_permission_reply` — inspect and answer permission requests.
-- `opencode_questions` — inspect pending questions.
-- `opencode_files` / `opencode_read_file` / `opencode_find` — workspace inspection.
-- `opencode_git_diff` / `opencode_status` / `opencode_vcs` — VCS inspection.
-- `opencode_agents` / `opencode_skills` / `opencode_commands` — capability discovery.
-- `opencode_config` / `opencode_providers` — configuration/provider discovery.
-- `opencode_mcp_status` — inspect OpenCode's configured MCP servers.
-- `opencode_path` — inspect OpenCode paths.
+### Core control
 
-## Underlying API mapping
+- `opencode_health`
+- `opencode_request` — low-level documented HTTP escape hatch
+- project/path/VCS discovery
+- session create/list/get/update/delete/status/children/todo/init/fork/abort/share/unshare/diff/summarize/revert/unrevert
+- synchronous and asynchronous prompts
+- message listing and retrieval
+- shell and slash-command execution
+- permission inspection and response
 
-The MCP is a thin wrapper over OpenCode's documented server API. The canonical runtime API description is available from OpenCode at `GET /doc`.
+### Workspace and capabilities
 
-Important documented mappings include:
+- file listing and file content
+- text, file-name, and symbol search
+- tracked-file status
+- agents, skills, slash commands
+- configuration read/patch
+- provider discovery/auth methods
+- OpenCode MCP status and dynamic MCP add
+- experimental tool IDs and model-specific schemas
+- LSP and formatter status
+- OpenCode logging
 
-- `/global/health` -> `opencode_health`
-- `/project` -> `opencode_projects`
-- `/session` -> session list/create
-- `/session/:id` -> session get/update/delete
-- `/session/:id/message` -> synchronous prompt/messages
-- `/session/:id/prompt_async` -> asynchronous prompt
-- `/session/:id/abort` -> abort
-- `/session/:id/command` -> command
-- `/session/:id/shell` -> shell
-- `/permission` and `/permission/:requestID/reply` -> permission tools
-- `/question` -> question inspection
-- `/file`, `/file/content`, `/find` -> workspace tools
-- `/file/status`, `/vcs`, `/vcs/diff` -> VCS tools
-- `/agent`, `/skill`, `/command` -> discovery tools
-- `/config`, `/config/providers` -> configuration tools
-- `/mcp` -> OpenCode MCP status
-- `/path` -> path inspection
+### UI/event control
+
+- documented `/tui/*` actions through `opencode_tui`
+- bounded SSE event snapshots through `opencode_event_snapshot`
+- provider credential write through `opencode_auth_set` using runtime-supplied values
+
+## Important implementation mapping
+
+The implementation follows the current OpenCode server documentation, including:
+
+- `/session/:id/shell` -> requires `agent`; optional `model`.
+- `/session/:id/command` -> supports `messageID?`, `agent?`, `model?`, `command`, `arguments`.
+- `/session/:id/permissions/:permissionID` -> `{ response, remember? }`.
+- `/session/:id/diff` -> optional `messageID` query.
+- `/find?pattern=` -> content search.
+- `/find/file?query=` -> file/directory-name search.
+- `/find/symbol?query=` -> workspace symbol search.
+
+The low-level `opencode_request` tool exists so Hermes can use a documented HTTP operation that does not yet have a dedicated wrapper. It should only be used with endpoints documented by the connected OpenCode `/doc` spec.
+
+## Permissions
+
+OpenCode remains the authority for execution permissions. Its documented permission outcomes are `allow`, `ask`, and `deny`; `--auto` auto-approves requests that are not explicitly denied. This MCP does not bypass OpenCode's policy layer.
 
 ## Limitations
 
-1. OpenCode's interactive PTY endpoint uses WebSocket; this MCP currently exposes the documented HTTP management surface but does not provide an interactive WebSocket tool.
-2. SSE event streams are not currently surfaced as a persistent MCP subscription. Hermes can poll session messages/status, or use `opencode_request` for compatible HTTP operations.
-3. The low-level request tool intentionally exposes only HTTP methods; it does not tunnel arbitrary WebSocket traffic.
-4. Some OpenCode endpoints are marked experimental by OpenCode and are not promoted to stable high-level MCP tools.
+1. OpenCode's interactive PTY is WebSocket-based; this MCP does not tunnel arbitrary WebSocket traffic.
+2. SSE is exposed as bounded snapshots rather than a persistent MCP subscription. Hermes can poll messages/status or call the event snapshot repeatedly.
+3. Experimental OpenCode endpoints are exposed only where the documented HTTP API supports them; they are not claimed to be stable.
+4. OpenCode may change its API. The running `/doc` document is the final compatibility check.
 
-## Security
+## Verification procedure
 
-Keep OpenCode bound to localhost unless remote access is intentionally required. If exposed beyond loopback, configure `OPENCODE_SERVER_PASSWORD`. Never place passwords/API keys in this file, source code, Git history, or MCP configuration committed to a repository.
+Run:
 
-## Verification status
+```bash
+bash verify-opencode.sh
+```
 
-`IMPLEMENTED` — source implementation and installer are present.
+That checks that the configured OpenCode server is reachable, `/doc` is available, and key current API paths exist. It does not constitute Hermes E2E verification.
 
-`TESTING` requires standalone execution against a real OpenCode server.
+For `VERIFIED`, all of the following must be demonstrated on a real machine:
 
-`VERIFIED` requires the complete Hermes -> MCP -> OpenCode -> real result -> MCP -> Hermes round trip with evidence. This repository does not claim that status yet.
+1. OpenCode server starts.
+2. `op-mcp` starts as an MCP stdio server.
+3. Hermes successfully registers/connects to `op-mcp`.
+4. Hermes invokes a control tool through MCP.
+5. OpenCode creates/uses a session and performs a real coding task.
+6. MCP returns the result to Hermes.
+7. The resulting filesystem/git state is independently checked.
+8. Evidence is recorded with commands, timestamps, project path, session ID, and result.
+
+Until those steps are actually executed, repository status remains `IMPLEMENTED`, not `VERIFIED`.
